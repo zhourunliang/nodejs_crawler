@@ -12,6 +12,70 @@ const task_url_head = config.task_url_head
 const redis_cache = require('./redis_cache')
 const redis_client = redis_cache.client
 
+const Task = function() {
+    this.id = 0
+    this.title = ''
+    this.url = ''
+    this.file_name = ''
+    this.file_url = 0
+    this.is_download = false
+}
+//总下载数
+var down_cont = 0
+//当前下载数
+var cur_cont = 0
+
+const taskFromBody = function(task_url, body) {
+    
+    const task = new Task()
+    // cheerio.load 用字符串作为参数返回一个可以查询的特殊对象
+    // body 就是 html 内容
+    const e = cheerio.load(body)
+    // 查询对象的查询语法和 DOM API 中的 querySelector 一样
+    const title = e('.controlBar').find('.epi-title').text()
+    const file_url = e('.audioplayer').find('audio').attr('src')
+    const ext = file_url.substring(file_url.length-4)
+    const task_id = task_url.substring(task_url.length-5)
+    const file_name = task_id+'.'+title+ext
+
+    task.id = task_id
+    task.name = title
+    task.url = task_url
+    task.file_name = file_name
+    task.file_url = file_url
+    task.is_download = false
+
+    redis_client.set('Task:id:'+task_id,JSON.stringify(task),function (error, res) {
+        if (error) {
+            log('Task:id:'+task_id, error)
+        } else {
+            log('Task:id:'+task_id, res)
+        }
+        cur_cont = cur_cont + 1;
+        if (down_cont == cur_cont) {
+            // 操作完成，关闭redis连接
+            redis_client.end(true);
+            log('已完成')
+        }
+
+    })
+}
+
+const taskFromUrl = function(task_url) {
+    request({
+        'url':task_url,
+        'proxy':'http://127.0.0.1:8087'
+        }, 
+        function(error, response, body) {
+        // 回调函数的三个参数分别是  错误, 响应, 响应数据
+        // 检查请求是否成功, statusCode 200 是成功的代码
+        if (error === null && response.statusCode == 200) {
+            taskFromBody(task_url, body)
+        } else {
+            log('*** ERROR 请求失败 ', error)
+        }
+    })
+}
 
 const parseLink = function(div) {
     let e = cheerio.load(div)
@@ -41,13 +105,14 @@ const dataFromUrl = function(url) {
                     // 然后加入 link_list 数组中
                     const div = e(element).html()
                     // log(div)
-                    const m = parseLink(div)
-                    const task_link = task_url_head+m
-                    const task_id = task_link.substring(task_link.length-5)
-                    redis_client.set('Task:id:'+task_id+':url', task_link, )
+                    const url_body = parseLink(div)
+                    const task_url = task_url_head+url_body
+                    down_cont = itmeDivs.length
+                    taskFromUrl(task_url)
+                    // redis_client.set('Task:id:'+task_id+':url', task_link, )
                 }
                 // 操作完成，关闭redis连接
-                redis_client.end(true)
+                // redis_client.end(true)
                 log('*** success ***')
             } else {
                 log('*** ERROR 请求失败 ', error)

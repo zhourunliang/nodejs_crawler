@@ -68,6 +68,11 @@ const __main = function() {
         }
        
     })
+    // let url = 'http://app3.rthk.hk/podcast/media/people/287_1112141904_13912.mp3' 
+    // request({
+    //         'url':url,
+    //         'proxy':'http://127.0.0.1:8087'
+    //         }).pipe(fs.createWriteStream('岳飛(五)）：靖康之難（上）.mp3'));
 }
 
 __main()
