@@ -39,7 +39,7 @@ const taskFromBody = function(task_url, body) {
     const file_name = task_id+'.'+title+ext
 
     task.id = task_id
-    task.name = title
+    task.title = title
     task.url = task_url
     task.file_name = file_name
     task.file_url = file_url
