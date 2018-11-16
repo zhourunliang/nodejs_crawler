@@ -1,7 +1,9 @@
 "use strict"
-const request = require('request')
-const cheerio = require('cheerio')
-const fs = require('fs')
+const http = require("http")
+const fs = require("fs")
+const path = require("path")
+
+
 const redis = require('redis')
 
 const utils = require('./utils')
@@ -12,45 +14,91 @@ const config = require('./config')
 const redis_cache = require('./redis_cache')
 const redis_client = redis_cache.client
 
-const download = function(url, path) {
-    log(url, path)
-    // request({
-    //             'url':url,
-    //             'proxy':'http://127.0.0.1:8087'
-    //         }).pipe(fs.createWriteStream(path)).on('close', function() {
-    //             log('下载完成')
-    //         });
-    var writeStream = fs.createWriteStream(path);
-    var readStream = request({
-        'url':url,
-        'proxy':'http://127.0.0.1:8087'
-    })
-    readStream.pipe(writeStream);
-    readStream.on('end', function() {
-        console.log('文件下载成功', path);
-    });
-    readStream.on('error', function() {
-        console.log("错误信息:" + err)
-    })
-    writeStream.on("finish", function() {
-        console.log("文件写入成功", path);
-        writeStream.end();
-    });
+
+const getHttpReqCallback = function(fileUrl, dirName, fileName, downCallback) {
+    var callback = function (res) {
+        log("request: " + fileUrl + " return status: " + res.statusCode)
+        if (res.statusCode != 200) {
+            startDownloadTask(fileUrl, dirName, fileName)
+            return
+        }
+        var contentLength = parseInt(res.headers['content-length'])
+        var fileBuff = []
+        res.on('data', function (chunk) {
+            var buffer = new Buffer(chunk)
+            fileBuff.push(buffer)
+        })
+        res.on('end', function () {
+            log("end downloading " + fileUrl)
+            if (isNaN(contentLength)) {
+                log(fileUrl + " content length error")
+                return
+            }
+            var totalBuff = Buffer.concat(fileBuff)
+            log("totalBuff.length = " + totalBuff.length + " " + "contentLength = " + contentLength)
+            if (totalBuff.length < contentLength) {
+                log(fileUrl + " download error, try again")
+                startDownloadTask(fileUrl, dirName, fileName)
+                return
+            }
+            fs.appendFile(dirName + "/" + fileName, totalBuff, function (err) {
+                if (err){
+                    throw err;  
+                }else{
+                    log('download success')
+                    downCallback()
+                } 
+            })
+        })
+    }
+
+    return callback
 }
+
+var startDownloadTask = function (fileUrl, dirName, fileName, downCallback) {
+    log("start downloading " + fileUrl)
+    var option = {
+        host : '127.0.0.1',
+        port : '8087',
+        method:'get',//这里是发送的方法
+        path : fileUrl,
+        headers:{
+            'Accept-Language':'zh-CN,zh;q=0.8',
+            'Host':'maps.googleapis.com'
+        }
+    }
+    var req = http.request(option, getHttpReqCallback(fileUrl, dirName, fileName, downCallback))
+    req.on('error', function (e) {
+        log("request " + fileUrl + " error, try again")
+        startDownloadTask(fileUrl, dirName, fileName, downCallback)
+    })
+    req.end()
+}
+
 
 const getTask = function() {
     redis_client.keys('Task:id:[0-9]*',function (err,v){
-        // console.log(v.sort())  
+        // log(v.sort())  
         let task_keys = v.sort()
         for (let i = 0; i < task_keys.length; i++) {
             redis_client.get(task_keys[i],function (err,v){
                 let task = JSON.parse(v)
+
+
                 let file_url = task.file_url
+                let dir_path = './download/'
                 let file_name = task.file_name
-                let file_path = './download/'+file_name.replace(/\//g,"-")
-                download(file_url, file_path)
-                if(i == task_keys.length-1){
-                    redis_client.end(true)                            
+                
+                if (task.is_download === false) {
+                    startDownloadTask(file_url, dir_path, file_name,function(){
+                        task.is_download = true
+                        redis_client.set(task_keys[i], JSON.stringify(task), function (error, res) {   
+                            log('update redis success', task_keys[i])
+                            if(i == task_keys.length-1){
+                                redis_client.end(true)                            
+                            }
+                        })
+                    })
                 }
             })    
         }

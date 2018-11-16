@@ -41,7 +41,7 @@ const taskFromBody = function(task_url, body) {
     task.id = task_id
     task.title = title
     task.url = task_url
-    task.file_name = file_name
+    task.file_name = file_name.replace(/\//g,"-")
     task.file_url = file_url
     task.is_download = false
 
