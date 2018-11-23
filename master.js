@@ -8,6 +8,8 @@ const log = utils.log
 
 const config = require('./config')
 const task_url_head = config.task_url_head
+const main_url = config.main_url
+const proxy_url = config.proxy_url
 
 const redis_cache = require('./redis_cache')
 const redis_client = redis_cache.client
@@ -41,7 +43,7 @@ const taskFromBody = function(task_url, body) {
     task.id = task_id
     task.title = title
     task.url = task_url
-    task.file_name = file_name.replace(/\//g,"-")
+    task.file_name = file_name.replace(/\//g,"-").replace(/:/g,"：")
     task.file_url = file_url
     task.is_download = false
 
@@ -51,20 +53,19 @@ const taskFromBody = function(task_url, body) {
         } else {
             log('Task:id:'+task_id, res)
         }
-        cur_cont = cur_cont + 1;
+        cur_cont = cur_cont + 1
         if (down_cont == cur_cont) {
             // 操作完成，关闭redis连接
             redis_client.end(true);
             log('已完成')
         }
-
     })
 }
 
 const taskFromUrl = function(task_url) {
     request({
         'url':task_url,
-        'proxy':'http://127.0.0.1:8087'
+        'proxy':proxy_url,
         }, 
         function(error, response, body) {
         // 回调函数的三个参数分别是  错误, 响应, 响应数据
@@ -86,8 +87,8 @@ const parseLink = function(div) {
 const dataFromUrl = function(url) {
     // request 从一个 url 下载数据并调用回调函数
     request({
-            'url':url,
-            'proxy':'http://127.0.0.1:8087'
+            'url' : url,
+            'proxy' : proxy_url,
             }, 
             function(error, response, body) {
             // 回调函数的三个参数分别是  错误, 响应, 响应数据
@@ -122,7 +123,7 @@ const dataFromUrl = function(url) {
 
 const __main = function() {
     // 这是主函数
-    const url = 'http://podcasts.rthk.hk/podcast/item_all.php?pid=287&current_year=2011'
+    const url = main_url
     dataFromUrl(url)
 }
 
