@@ -21,3 +21,6 @@ node master.js
 ```
 node salver.js
 ```
+
+### 设计图
+![示例](https://github.com/zhourunliang/nodejs_crawler/blob/master/images/主从分布式爬虫.png)
